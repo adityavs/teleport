@@ -663,7 +663,7 @@ tsh --proxy <proxy-addr> ssh <hostname>
 
 ## Adding and Deleting Users
 
-This section covers internal user identities, i.e.user accounts created and
+This section covers internal user identities, i.e. user accounts created and
 stored in Teleport's internal storage. Most production users of Teleport use
 _external_ users via [Github](#github-oauth-20) or [Okta](ssh_okta) or any other
 SSO provider (Teleport Enterprise supports any SAML or OIDC compliant identity
@@ -1057,7 +1057,7 @@ the audit log:
 3. **Optional: Enhanced Session Recording** 
 
 Refer to the ["Audit Log" chapter in the Teleport
-Architecture](architecture/teleport_auth.md#audit-log) to learn more about how the audit Log and
+Architecture](architecture/teleport_auth.md#audit-log) to learn more about how the audit log and
 session recording are designed.
 
 ### SSH Events
@@ -1066,7 +1066,7 @@ Teleport supports multiple storage back-ends for storing the SSH events. The
 section below uses the `dir` backend as an example. `dir` backend uses the local
 filesystem of an auth server using the configurable `data_dir` directory.
 
-For highly available (HA) configuration users can refer to
+For highly available (HA) configuration, users can refer to our 
 [DynamoDB](#using-dynamodb) or [etcd](#using-etcd) chapters on how to configure
 the SSH events and recorded sessions to be stored on network storage. It is even
 possible to store the audit log in multiple places at the same time, see
@@ -1762,7 +1762,7 @@ Environment="NO_PROXY=localhost,127.0.0.1,192.168.0.0/16,172.16.0.0/12,10.0.0.0/
 
 ## PAM Integration
 
-Teleport SSH daemon can be configured to integrate with
+Teleport node service can be configured to integrate with
 [PAM](https://en.wikipedia.org/wiki/Linux_PAM). This allows Teleport to create
 user sessions using PAM session profiles.
 
@@ -2046,6 +2046,10 @@ belong to:
 ``` bsh
 $ tctl users add joe --k8s-groups="system:masters"
 ```
+
+!!! tip "NOTE"
+
+    The above command is for the Teleport OSS version. Teleport Enterprise customers manage `k8s-groups` through RBAC.
 
 If using Teleport Community SSO with Github, Kubernetes groups can be assigned
 to Github teams with a Teleport connector. See example above in [Github OAuth
@@ -2609,11 +2613,8 @@ Now you can see the monitoring information by visiting several endpoints:
 
 ## Getting Help
 
-If you need help please ask on our [forum](https://community.gravitational.com). If you're
-a paying customer, please open a tick via our control panel. 
+If you need help, please ask on our [community forum](https://community.gravitational.com/). You can also open an [issue on Github](https://github.com/gravitational/teleport/issues).
 
-If you find a bug, please open an [issue on Github](https://github.com/gravitational/teleport/issues).
+For commercial support, you can create a ticket through the [customer dashboard](https://dashboard.gravitational.com/).
 
-For commercial support, custom features or to try our commercial edition,
-[Teleport Enterprise](enterprise/index.md), please reach out to us:
-`sales@gravitational.com` .
+For more information about custom features, or to try our [Enterprise edition](enterprise/index.md) of Teleport, please reach out to us at [sales@gravitational.com](mailto:sales@gravitational.com).

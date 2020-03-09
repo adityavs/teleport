@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ func (s *KubeSuite) SetUpSuite(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	ns := newNamespace(testNamespace)
-	_, err = s.Core().Namespaces().Create(ns)
+	_, err = s.CoreV1().Namespaces().Create(ns)
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
 			c.Fatalf("Failed to create namespace: %v.", err)
@@ -155,6 +155,7 @@ func (s *KubeSuite) TestKubeExec(c *check.C) {
 		Allow: services.RoleConditions{
 			Logins:     []string{username},
 			KubeGroups: []string{teleport.KubeSystemMasters},
+			KubeUsers:  []string{"alice@example.com"},
 		},
 	})
 	t.AddUserWithRole(username, role)
@@ -166,7 +167,8 @@ func (s *KubeSuite) TestKubeExec(c *check.C) {
 	c.Assert(err, check.IsNil)
 	defer t.Stop(true)
 
-	// impersonating client requests will be denied
+	// impersonating client requests will be denied if the headers
+	// are referencing users or groups not allowed by the existing roles
 	impersonatingProxyClient, impersonatingProxyClientConfig, err := kubeProxyClient(kubeProxyConfig{
 		t:             t,
 		username:      username,
@@ -175,17 +177,34 @@ func (s *KubeSuite) TestKubeExec(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// try get request to fetch available pods
-	_, err = impersonatingProxyClient.Core().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+	_, err = impersonatingProxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
 		LabelSelector: kubeDNSLabels.AsSelector().String(),
 	})
 	c.Assert(err, check.NotNil)
+
+	// scoped client requests will be allowed, as long as the impersonation headers
+	// are referencing users and groups allowed by existing roles
+	scopedProxyClient, scopedProxyClientConfig, err := kubeProxyClient(kubeProxyConfig{
+		t:        t,
+		username: username,
+		impersonation: &rest.ImpersonationConfig{
+			UserName: role.GetKubeUsers(services.Allow)[0],
+			Groups:   role.GetKubeGroups(services.Allow),
+		},
+	})
+	c.Assert(err, check.IsNil)
+
+	_, err = scopedProxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+		LabelSelector: kubeDNSLabels.AsSelector().String(),
+	})
+	c.Assert(err, check.IsNil)
 
 	// set up kube configuration using proxy
 	proxyClient, proxyClientConfig, err := kubeProxyClient(kubeProxyConfig{t: t, username: username})
 	c.Assert(err, check.IsNil)
 
 	// try get request to fetch available pods
-	pods, err := proxyClient.Core().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+	pods, err := proxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
 		LabelSelector: kubeDNSLabels.AsSelector().String(),
 	})
 	c.Assert(len(pods.Items), check.Not(check.Equals), int(0))
@@ -266,6 +285,68 @@ loop:
 	})
 	c.Assert(err, check.NotNil)
 	c.Assert(err.Error(), check.Matches, ".*impersonation request has been denied.*")
+
+	// scoped kube exec is allowed, impersonation headers
+	// are allowed by the role
+	term = NewTerminal(250)
+	term.Type("\aecho hi\n\r\aexit\n\r\a")
+	out = &bytes.Buffer{}
+	err = kubeExec(scopedProxyClientConfig, kubeExecArgs{
+		podName:      pod.Name,
+		podNamespace: pod.Namespace,
+		container:    kubeDNSContainer,
+		command:      []string{"/bin/sh"},
+		stdout:       out,
+		tty:          true,
+		stdin:        &term,
+	})
+	c.Assert(err, check.IsNil)
+}
+
+// TestKubeDeny makes sure that deny rule conflicting with allow
+// rule takes precendence
+func (s *KubeSuite) TestKubeDeny(c *check.C) {
+	tconf := s.teleKubeConfig(Host)
+
+	t := NewInstance(InstanceConfig{
+		ClusterName: Site,
+		HostID:      HostID,
+		NodeName:    Host,
+		Ports:       s.ports.PopIntSlice(5),
+		Priv:        s.priv,
+		Pub:         s.pub,
+	})
+
+	username := s.me.Username
+	role, err := services.NewRole("kubemaster", services.RoleSpecV3{
+		Allow: services.RoleConditions{
+			Logins:     []string{username},
+			KubeGroups: []string{teleport.KubeSystemMasters},
+			KubeUsers:  []string{"alice@example.com"},
+		},
+		Deny: services.RoleConditions{
+			KubeGroups: []string{teleport.KubeSystemMasters},
+			KubeUsers:  []string{"alice@example.com"},
+		},
+	})
+	t.AddUserWithRole(username, role)
+
+	err = t.CreateEx(nil, tconf)
+	c.Assert(err, check.IsNil)
+
+	err = t.Start()
+	c.Assert(err, check.IsNil)
+	defer t.Stop(true)
+
+	// set up kube configuration using proxy
+	proxyClient, _, err := kubeProxyClient(kubeProxyConfig{t: t, username: username})
+	c.Assert(err, check.IsNil)
+
+	// try get request to fetch available pods
+	_, err = proxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+		LabelSelector: kubeDNSLabels.AsSelector().String(),
+	})
+	c.Assert(err, check.NotNil)
 }
 
 // TestKubePortForward tests kubernetes port forwarding
@@ -302,7 +383,7 @@ func (s *KubeSuite) TestKubePortForward(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// pick the first kube-dns pod and run port forwarding on it
-	pods, err := s.Core().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+	pods, err := s.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
 		LabelSelector: kubeDNSLabels.AsSelector().String(),
 	})
 	c.Assert(len(pods.Items), check.Not(check.Equals), int(0))
@@ -481,7 +562,7 @@ func (s *KubeSuite) TestKubeTrustedClustersClientCert(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// try get request to fetch available pods
-	_, err = impersonatingProxyClient.Core().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+	_, err = impersonatingProxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
 		LabelSelector: kubeDNSLabels.AsSelector().String(),
 	})
 	c.Assert(err, check.NotNil)
@@ -495,7 +576,7 @@ func (s *KubeSuite) TestKubeTrustedClustersClientCert(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// try get request to fetch available pods
-	pods, err := proxyClient.Core().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+	pods, err := proxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
 		LabelSelector: kubeDNSLabels.AsSelector().String(),
 	})
 	c.Assert(len(pods.Items), check.Not(check.Equals), int(0))
@@ -746,7 +827,7 @@ func (s *KubeSuite) TestKubeTrustedClustersSNI(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// try get request to fetch available pods
-	_, err = impersonatingProxyClient.Core().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+	_, err = impersonatingProxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
 		LabelSelector: kubeDNSLabels.AsSelector().String(),
 	})
 	c.Assert(err, check.NotNil)
@@ -756,7 +837,7 @@ func (s *KubeSuite) TestKubeTrustedClustersSNI(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// try get request to fetch available pods
-	pods, err := proxyClient.Core().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+	pods, err := proxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
 		LabelSelector: kubeDNSLabels.AsSelector().String(),
 	})
 	c.Assert(len(pods.Items), check.Not(check.Equals), int(0))
@@ -945,7 +1026,7 @@ func (s *KubeSuite) runKubeDisconnectTest(c *check.C, tc disconnectTestCase) {
 	c.Assert(err, check.IsNil)
 
 	// try get request to fetch available pods
-	pods, err := proxyClient.Core().Pods(kubeSystemNamespace).List(metav1.ListOptions{
+	pods, err := proxyClient.CoreV1().Pods(kubeSystemNamespace).List(metav1.ListOptions{
 		LabelSelector: kubeDNSLabels.AsSelector().String(),
 	})
 	c.Assert(len(pods.Items), check.Not(check.Equals), int(0))
@@ -1140,7 +1221,7 @@ func newPortForwarder(kubeConfig *rest.Config, args kubePortForwardArgs) (*kubeP
 		return nil, trace.Wrap(err)
 	}
 
-	upgradeRoundTripper := streamspdy.NewSpdyRoundTripper(tlsConfig, true)
+	upgradeRoundTripper := streamspdy.NewSpdyRoundTripper(tlsConfig, true, false)
 	client := &http.Client{
 		Transport: upgradeRoundTripper,
 	}

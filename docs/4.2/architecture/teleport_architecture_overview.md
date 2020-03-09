@@ -35,7 +35,7 @@ managing access!
 
 ## Definitions
 
-Here are definitions of the key concepts you will use in teleport.
+Here are definitions of the key concepts you will use in Teleport.
 
 |Concept                  | Description
 |------------------|------------
@@ -44,7 +44,7 @@ Here are definitions of the key concepts you will use in teleport.
 | Cluster          | A cluster is a group of nodes that work together and can be considered a single system. Cluster nodes can create connections to each other, often over a private network. Cluster nodes often require TLS authentication to ensure that communication between nodes remains secure and comes from a trusted source.
 | Certificate Authority (CA) | A Certificate Authority issues SSL certificates in the form of public/private keypairs.
 | [Teleport Node](teleport_nodes.md)    | A Teleport Node is a regular node that is running the Teleport Node service. Teleport Nodes can be accessed by authorized Teleport Users. A Teleport Node is always considered a member of a Teleport Cluster, even if it's a single-node cluster.
-| [Teleport User](teleport_users.md)    | A Teleport User represents a someone who needs access to a Teleport Cluster. Users have stored usernames and passwords, and are mapped to OS users on each node. User data is stored locally or in an external store.
+| [Teleport User](teleport_users.md)    | A Teleport User represents someone who needs access to a Teleport Cluster. Users have stored usernames and passwords, and are mapped to OS users on each node. User data is stored locally or in an external store.
 | Teleport Cluster | A Teleport Cluster is comprised of one or more nodes, each of which hold public keys signed by the same [Auth Server CA](teleport_auth.md). The CA cryptographically signs the public key of a node, establishing cluster membership.
 | [Teleport CA](teleport_auth.md) | Teleport operates two internal CAs as a function of the Auth service. One is used to sign User public keys and the other signs Node public keys. Each certificate is used to prove identity, cluster membership and manage access.
 
@@ -88,6 +88,8 @@ steps are explained below the diagram.
 4. Authorize Client Access to Node
 
 !!! tip "Tip"
+
+
     In the diagram above we show each Teleport service separately for
     clarity, but Teleport services do not have to run on separate nodes.
     Teleport can be run as a binary on a single-node cluster with no external
@@ -104,6 +106,8 @@ steps are explained in detail below the diagram.
 ![Teleport Everything](../img/everything.svg)
 
 !!! note "Caution"
+
+
     The Teleport Admin tool, `tctl` , must be physically present
     on the same machine where Teleport Auth is running. Adding new nodes or
     inviting new users to the cluster is only possible using this tool.
@@ -143,13 +147,14 @@ generator. The password + 2nd factor are submitted to a proxy via HTTPS,
 therefore it is critical for a secure configuration of Teleport to install a
 proper HTTPS certificate on a proxy.
 
-!!! warning "Warning":
+!!! warning "Warning"
+
     Do not use self-signed SSL/HTTPS certificates in production!
 
 If the credentials are correct, the auth server generates and signs a new
-certificate and returns it to a client via the proxy. The client stores this key
+certificate and returns it to the client via the proxy. The client stores this key
 and will use it for subsequent logins. The key will automatically expire after
-12 hours by default. This TTL can be [configured](../cli-docs.md#tctl-users-add)
+12 hours by default. This [TTL](https://en.wikipedia.org/wiki/Time_to_live) can be [configured](../cli-docs.md#tctl-users-add)
 to another value by the cluster administrator.
 
 ### 3: Lookup Node
@@ -159,7 +164,7 @@ to another value by the cluster administrator.
 At this step, the proxy tries to locate the requested node in a cluster. There
 are three lookup mechanisms a proxy uses to find the node's IP address:
 
-1. Use DNS to resolve the name requested by the client.
+1. Uses DNS to resolve the name requested by the client.
 2. Asks the Auth Server if there is a Node registered with this `nodename` .
 3. Asks the Auth Server to find a node (or nodes) with a label that matches the
    requested name.
@@ -168,7 +173,9 @@ If the node is located, the proxy establishes the connection between the client
 and the requested node. The destination node then begins recording the session,
 sending the session history to the auth server to be stored.
 
-!!! note "Note":
+!!! note "Note"
+
+
     Teleport may also be configured to have the session recording
     occur on the proxy, see [Audit Log](../admin-guide.md#audit-log) for more
     information.
@@ -181,7 +188,7 @@ When the node receives a connection request, it checks with the Auth Server to
 validate the node's public key certificate and validate the Node's cluster
 membership.
 
-If the node certificate is valid the node is allowed to access the Auth Server
+If the node certificate is valid, the node is allowed to access the Auth Server
 API which provides access to information about nodes and users in the cluster.
 
 ### 5: Grant User Node Access
@@ -192,7 +199,7 @@ The node requests the Auth Server to provide a list of [OS users (user
 mappings)](../admin-guide.md#adding-and-deleting-users) for the connecting client, to make sure the client is
 authorized to use the requested OS login.
 
-Finally the client is authorized to create an SSH connection to a node.
+Finally, the client is authorized to create an SSH connection to a node.
 
 ![Proxy Connection Established](../img/proxy_client_connect.svg)
 
@@ -215,7 +222,7 @@ Unlike `ssh`, `tsh` is very opinionated about authentication: it always uses
 auto-expiring keys and it always connects to Teleport nodes via a proxy.
 
 When `tsh` logs in, the auto-expiring key is stored in `~/.tsh` and is valid for
-12 hours by default, unless you specify another interval via `--ttl` flag
+12 hours by default, unless you specify another interval via the `--ttl` flag
 (capped by the server-side configuration).
 
 You can learn more about `tsh` in the [User Manual](../user-manual.md).
@@ -236,7 +243,7 @@ You can learn more about `tctl` in the [Admin Manual](../admin-guide.md).
 
 * If you haven't already, read the [Quickstart Guide](../quickstart.md) to run a
 minimal setup of Teleport yourself.
-* Set up Teleport for your team with the [Admin Guide](../admin-guide.md)
+* Set up Teleport for your team with the [Admin Guide](../admin-guide.md).
 
 Read the rest of the Architecture Guides:
 

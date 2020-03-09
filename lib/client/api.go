@@ -1132,13 +1132,12 @@ func (tc *TeleportClient) Play(ctx context.Context, namespace, sessionID string)
 
 	// read the stream into a buffer:
 	var stream []byte
-	for err == nil {
+	for {
 		tmp, err := site.GetSessionChunk(namespace, *sid, len(stream), events.MaxChunkBytes)
 		if err != nil {
 			return trace.Wrap(err)
 		}
 		if len(tmp) == 0 {
-			err = io.EOF
 			break
 		}
 		stream = append(stream, tmp...)
@@ -1409,6 +1408,17 @@ func (tc *TeleportClient) ListNodes(ctx context.Context) ([]services.Server, err
 	defer proxyClient.Close()
 
 	return proxyClient.FindServersByLabels(ctx, tc.Namespace, tc.Labels)
+}
+
+// ListAllNodes is the same as ListNodes except that it ignores labels.
+func (tc *TeleportClient) ListAllNodes(ctx context.Context) ([]services.Server, error) {
+	proxyClient, err := tc.ConnectToProxy(ctx)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	defer proxyClient.Close()
+
+	return proxyClient.FindServersByLabels(ctx, tc.Namespace, nil)
 }
 
 // runCommand executes a given bash command on a bunch of remote nodes
@@ -1708,6 +1718,7 @@ func (tc *TeleportClient) Login(ctx context.Context, activateKey bool) (*Key, er
 	key.Cert = response.Cert
 	key.TLSCert = response.TLSCert
 	key.ProxyHost = webProxyHost
+	key.TrustedCA = response.HostSigners
 
 	// Check that a host certificate for at least one cluster was returned and
 	// extract the name of the current cluster from the first host certificate.
